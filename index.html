@@ -3,28 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PPTX Viewer - Debug Lengkap</title>
-    <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <script src="https://unpkg.com/pptxjs@1.21.1/dist/pptxjs.min.js"></script>
+    <title>PPTX Viewer - Stabil</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; display: flex; flex-direction: column; align-items: center; padding: 20px; min-height: 100vh; }
+        body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; display: flex; flex-direction: column; align-items: center; padding: 20px; }
         .container { width: 100%; max-width: 1100px; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); padding: 25px 30px; }
-        h1 { color: #2c3e50; margin-bottom: 10px; }
-        .upload-area { margin: 20px 0; display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }
+        h1 { color: #2c3e50; }
+        .upload-area { margin: 20px 0; display: flex; gap: 15px; align-items: center; }
         #fileInput { display: none; }
-        .custom-file-upload { background: #3498db; color: white; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-weight: 500; }
-        .custom-file-upload:hover { background: #2980b9; }
-        #fileName { color: #555; font-style: italic; }
-        .status-box { margin: 15px 0; padding: 12px; background: #f8f9fa; border-left: 4px solid #6c757d; border-radius: 4px; font-family: monospace; font-size: 0.9rem; white-space: pre-wrap; word-break: break-word; }
-        .status-box.error { border-color: #e74c3c; background: #fdf2f2; }
-        .status-box.success { border-color: #27ae60; background: #f0faf3; }
-        .nav-bar { display: flex; align-items: center; justify-content: center; gap: 20px; margin: 20px 0; }
-        .nav-btn { background: #ecf0f1; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        .custom-file-upload { background: #3498db; color: white; padding: 12px 24px; border-radius: 6px; cursor: pointer; }
+        .status { padding: 12px; margin: 10px 0; background: #f8f9fa; border-left: 4px solid #6c757d; }
+        .status.error { border-color: red; background: #fee; }
+        .nav-bar { display: flex; justify-content: center; gap: 20px; margin: 20px 0; }
+        .nav-btn { background: #ecf0f1; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; }
         .nav-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        #slideInfo { font-weight: 500; min-width: 100px; text-align: center; }
-        .slide-container { border: 1px solid #ddd; border-radius: 8px; overflow: hidden; margin: 20px auto; display: flex; justify-content: center; align-items: center; min-height: 400px; padding: 10px; }
+        .slide-container { border: 1px solid #ddd; border-radius: 8px; min-height: 400px; padding: 10px; display: flex; justify-content: center; align-items: center; }
         .slide-wrapper { display: none; width: 100%; }
         .slide-wrapper.active { display: block; }
         .slide-wrapper canvas { max-width: 100%; height: auto; margin: 0 auto; border: 1px solid #eee; }
@@ -32,181 +25,114 @@
 </head>
 <body>
     <div class="container">
-        <h1>📊 PPTX Viewer (Diagnostik)</h1>
-        <p>Pilih file presentasi (.pptx). Setiap langkah akan ditampilkan di bawah.</p>
-        
+        <h1>📊 PPTX Viewer</h1>
         <div class="upload-area">
             <label for="fileInput" class="custom-file-upload">📂 Pilih File PPTX</label>
             <input type="file" id="fileInput" accept=".pptx">
             <span id="fileName"></span>
         </div>
-        
-        <!-- Area status/log -->
-        <div id="statusBox" class="status-box">
-            Menunggu file dipilih...
-        </div>
-        
+        <div id="statusBox" class="status">Memeriksa library...</div>
         <div id="viewerArea" style="display: none;">
             <div class="nav-bar">
                 <button id="prevBtn" class="nav-btn" disabled>◀ Sebelumnya</button>
                 <span id="slideInfo">Slide 0 / 0</span>
                 <button id="nextBtn" class="nav-btn" disabled>Selanjutnya ▶</button>
             </div>
-            <div id="slideContainer" class="slide-container">
-                <div id="loadingMsg">Memproses presentasi...</div>
-            </div>
+            <div id="slideContainer" class="slide-container"></div>
         </div>
     </div>
 
+    <!-- Library dimuat di sini -->
+    <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://unpkg.com/pptxjs@1.21.1/dist/pptxjs.min.js"></script>
+
     <script>
+        // Cek apakah library sudah siap
+        function checkLibrary() {
+            if (typeof $ === 'undefined') {
+                return 'jQuery tidak terdeteksi.';
+            }
+            if (typeof JSZip === 'undefined') {
+                return 'JSZip tidak terdeteksi.';
+            }
+            if (typeof $.fn.pptxToHtml === 'undefined') {
+                return 'PPTXjs tidak terdeteksi (pptxToHtml bukan fungsi).';
+            }
+            return null; // semua OK
+        }
+
         $(function() {
-            let slides = [];
-            let currentSlide = 0;
-            let totalSlides = 0;
-
-            const $fileInput = $('#fileInput');
-            const $fileName = $('#fileName');
-            const $viewerArea = $('#viewerArea');
-            const $slideContainer = $('#slideContainer');
+            const libError = checkLibrary();
             const $statusBox = $('#statusBox');
-            const $prevBtn = $('#prevBtn');
-            const $nextBtn = $('#nextBtn');
-            const $slideInfo = $('#slideInfo');
-
-            // Fungsi untuk menulis log ke status box
-            function log(msg, isError = false) {
-                $statusBox.removeClass('error success').addClass(isError ? 'error' : 'success');
-                $statusBox.text(msg);
-                console.log(isError ? '[ERROR]' : '[OK]', msg);
+            if (libError) {
+                $statusBox.addClass('error').text('❌ Gagal memuat library: ' + libError + 
+                    '\n\nSilakan periksa koneksi internet atau gunakan file lokal. Lihat petunjuk di bawah.');
+                return;
             }
+            $statusBox.text('✅ Library siap. Silakan pilih file PPTX.');
 
-            // Validasi apakah file adalah ZIP valid (langkah awal)
-            async function validateZip(file) {
-                log('Memvalidasi file sebagai ZIP...');
-                const buffer = await file.arrayBuffer();
-                try {
-                    const zip = await JSZip.loadAsync(buffer);
-                    // Cek apakah ada file [Content_Types].xml khas PPTX
-                    if (zip.file('[Content_Types].xml')) {
-                        log('File valid: struktur PPTX terdeteksi. Melanjutkan...');
-                        return buffer; // kembalikan buffer untuk diproses lebih lanjut
-                    } else {
-                        throw new Error('File ZIP ditemukan, tetapi tidak memiliki [Content_Types].xml. Bukan file PPTX valid.');
-                    }
-                } catch (zipErr) {
-                    throw new Error('File bukan ZIP/PPTX: ' + zipErr.message);
-                }
-            }
+            let slides = [], currentSlide = 0, totalSlides = 0;
 
-            // Render PPTX dari ArrayBuffer (lebih efisien)
-            function renderPptxFromBuffer(buffer) {
-                log('Mengonversi buffer ke base64 untuk pptxjs...');
-                // pptxjs masih butuh base64, jadi konversi
-                const blob = new Blob([buffer], {type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation'});
-                const reader = new FileReader();
-                reader.onload = function() {
-                    const dataUrl = reader.result;
-                    const base64 = dataUrl.split(',')[1];
-                    log('Base64 siap. Merender slide...');
-                    doRender(base64);
-                };
-                reader.onerror = function() {
-                    log('Gagal mengonversi buffer ke base64.', true);
-                };
-                reader.readAsDataURL(blob);
-            }
-
-            function doRender(base64) {
-                $slideContainer.empty().append('<div>Merender slide...</div>');
-                $viewerArea.show();
-                
-                try {
-                    $("#slideContainer").pptxToHtml({
-                        pptxBase64: base64,
-                        slideMode: true,
-                        slidesScale: "100%",
-                        mediaProcess: true,
-                        callback: function(result) {
-                            slides = $('#slideContainer .slide-wrapper').toArray();
-                            totalSlides = slides.length;
-                            log(`Render selesai. Ditemukan ${totalSlides} slide.`);
-                            
-                            if (totalSlides === 0) {
-                                log('Tidak ada slide yang bisa ditampilkan (mungkin tidak ada konten).', true);
-                                $slideContainer.html('<p style="padding:20px; color:red;">Tidak ada slide ditemukan dalam file.</p>');
-                                return;
-                            }
-                            $(slides).removeClass('active').hide();
-                            currentSlide = 0;
-                            showSlide(currentSlide);
-                            updateNavigation();
-                        },
-                        error: function(err) {
-                            log('Error dari pptxjs: ' + (err.message || err), true);
-                            $slideContainer.html('<p style="padding:20px; color:red;">Gagal merender slide. Lihat log di atas.</p>');
-                        }
-                    });
-                } catch (ex) {
-                    log('Exception: ' + ex.message, true);
-                }
-            }
-
-            function showSlide(index) {
-                if (slides.length === 0) return;
-                $(slides).removeClass('active').hide();
-                $(slides[index]).addClass('active').show();
-                $slideInfo.text(`Slide ${index + 1} / ${totalSlides}`);
-            }
-
-            function updateNavigation() {
-                $prevBtn.prop('disabled', currentSlide === 0);
-                $nextBtn.prop('disabled', currentSlide === totalSlides - 1);
-            }
-
-            // Event handler
-            $fileInput.on('change', async function(e) {
+            $('#fileInput').on('change', async function(e) {
                 const file = e.target.files[0];
                 if (!file) return;
-
-                $fileName.text(file.name);
-                $viewerArea.hide();
-                slides = [];
-                currentSlide = 0;
-                totalSlides = 0;
-                $slideContainer.empty();
-
-                log(`Memproses file: ${file.name} (${(file.size/1024).toFixed(1)} KB)`);
-
+                $('#fileName').text(file.name);
+                $('#viewerArea').hide();
+                $statusBox.text('Membaca file...');
+                
                 try {
-                    // Langkah 1: validasi ZIP
-                    const buffer = await validateZip(file);
-                    // Langkah 2: render
-                    renderPptxFromBuffer(buffer);
+                    const buffer = await file.arrayBuffer();
+                    // Cek apakah file ZIP valid
+                    await JSZip.loadAsync(buffer); // validasi
+                    const blob = new Blob([buffer]);
+                    const reader = new FileReader();
+                    reader.onload = function() {
+                        const base64 = reader.result.split(',')[1];
+                        $statusBox.text('Merender slide...');
+                        try {
+                            $('#slideContainer').pptxToHtml({
+                                pptxBase64: base64,
+                                slideMode: true,
+                                slidesScale: "100%",
+                                mediaProcess: true,
+                                callback: function() {
+                                    slides = $('#slideContainer .slide-wrapper').toArray();
+                                    totalSlides = slides.length;
+                                    if (totalSlides === 0) {
+                                        $statusBox.addClass('error').text('Tidak ada slide ditemukan.');
+                                        return;
+                                    }
+                                    $(slides).removeClass('active').hide();
+                                    currentSlide = 0;
+                                    showSlide(currentSlide);
+                                    $('#viewerArea').show();
+                                    $statusBox.text(`Berhasil memuat ${totalSlides} slide.`);
+                                },
+                                error: function(err) {
+                                    $statusBox.addClass('error').text('Error PPTXjs: ' + (err.message || err));
+                                }
+                            });
+                        } catch (ex) {
+                            $statusBox.addClass('error').text('Exception: ' + ex.message);
+                        }
+                    };
+                    reader.readAsDataURL(blob);
                 } catch (err) {
-                    log('GAGAL: ' + err.message, true);
-                    $viewerArea.hide();
+                    $statusBox.addClass('error').text('Gagal membaca file: ' + err.message);
                 }
             });
 
-            $prevBtn.on('click', function() {
-                if (currentSlide > 0) {
-                    currentSlide--;
-                    showSlide(currentSlide);
-                    updateNavigation();
-                }
-            });
-            $nextBtn.on('click', function() {
-                if (currentSlide < totalSlides - 1) {
-                    currentSlide++;
-                    showSlide(currentSlide);
-                    updateNavigation();
-                }
-            });
-            $(document).on('keydown', function(e) {
-                if (!$viewerArea.is(':visible')) return;
-                if (e.key === 'ArrowLeft') $prevBtn.click();
-                else if (e.key === 'ArrowRight') $nextBtn.click();
-            });
+            function showSlide(idx) {
+                $(slides).removeClass('active').hide();
+                $(slides[idx]).addClass('active').show();
+                $('#slideInfo').text(`Slide ${idx+1} / ${totalSlides}`);
+                $('#prevBtn').prop('disabled', idx === 0);
+                $('#nextBtn').prop('disabled', idx === totalSlides-1);
+            }
+
+            $('#prevBtn').click(() => { if (currentSlide > 0) showSlide(--currentSlide); });
+            $('#nextBtn').click(() => { if (currentSlide < totalSlides-1) showSlide(++currentSlide); });
         });
     </script>
 </body>
